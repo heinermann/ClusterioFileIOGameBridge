@@ -1,11 +1,14 @@
 {
   "name": "@heinermann/plugin-fileio_game_bridge",
-  "version": "1.0",
+  "version": "1.0.0",
   "description": "Connect with other games via File I/O",
   "author": "Adam Heinermann",
   "homepage": "https://github.com/Heinermann/ClusterioFileIOGameBridge",
   "license": "MIT",
   "repository": "Heinermann/ClusterioFileIOGameBridge",
+  "scripts": {
+    "build": "webpack-cli --env production"
+  },
   "keywords": [
     "clusterio",
     "factorio"

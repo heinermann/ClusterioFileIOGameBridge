@@ -5,7 +5,6 @@ const path = require('node:path');
 const libPlugin = require("@clusterio/lib/plugin");
 const Tail = require("tail").Tail
 
-
 class FileInterface {
     directory
     
