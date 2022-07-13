@@ -33,8 +33,8 @@ class FileInterface {
         this.#createFiles('a');
 
         this.#recvfile = new Tail(this.#recvfilename);
-        this.#recvfile.on("line", this.#onRecv);
-        this.#recvfile.on("error", this.#onRecvError);
+        this.#recvfile.on("line", this.#onRecv.bind(this));
+        this.#recvfile.on("error", this.#onRecvError.bind(this));
     }
 
     send(message) {
@@ -46,8 +46,8 @@ class FileInterface {
             this.#messageQueue.push(...messages);
         }
         else {
-            let textData = messages.map(JSON.stringify).join('\n');
-            fs.appendFileSync(this.#sendfile, textData);
+            const textData = messages.map(JSON.stringify).join('\n');
+            fs.appendFileSync(this.#sendfile, `${textData}\n`);
             this.#numWritten += messages.length;
     
             if (this.#numWritten >= this.#plugin.numMessagesBeforeWipe) {
@@ -58,10 +58,10 @@ class FileInterface {
 
     #onRecv(message) {
         // TODO: Try/catch for validity and retry logic (and fallback)
-        message = JSON.parse(message);
-        switch(message.type) {
+        const parsed = JSON.parse(message);
+        switch(parsed.type) {
             case "chat_event":
-                this.#plugin.sendChat(message.data.content);
+                this.#plugin.sendChat(parsed.data.content);
                 break;
             case "ACKWIPE":
                 // acknowledged wipe
@@ -126,20 +126,23 @@ class InstancePlugin extends libPlugin.BaseInstancePlugin {
         
         this.#interfaces = new Map();
 
-        this.slave.connector.on("message", this.#processMessage);
+        this.slave.connector.on("message", this.#processMessage.bind(this));
         this.logger.info("CALLED init");
     }
 
     async onStart() {
         // All plugins should be loaded here, this relies on a factorio instance though
         this.#updateDirectories();
+
+
+
         this.logger.info("CALLED onStart");
     }
 
     #removeInterfaces(items) {
         for (const dir of items) {
-            let interface = this.#interfaces.get(dir);
-            if (interface) interface.close();
+            const conn = this.#interfaces.get(dir);
+            if (conn) conn.close();
             this.#interfaces.delete(dir);
         }
     }
@@ -153,11 +156,11 @@ class InstancePlugin extends libPlugin.BaseInstancePlugin {
     }
 
     #updateDirectories() {
-        let directories = this.interfaceDirectories.split(/[;:]/);
-        let oldDirs = this.#interfaces.keys();
+        const directories = this.interfaceDirectories.split(/[;]/);
+        const oldDirs = Array.from(this.#interfaces.keys());
 
-        let removals = oldDirs.filter(dir => !directories.includes(dir));
-        let additions = directories.filter(dir => !oldDirs.includes(dir));
+        const removals = oldDirs.filter(dir => !directories.includes(dir));
+        const additions = directories.filter(dir => !oldDirs.includes(dir));
         
         this.#removeInterfaces(removals);
         this.#createInterfaces(additions);
@@ -196,14 +199,10 @@ class InstancePlugin extends libPlugin.BaseInstancePlugin {
 
     // I know this is hacky but I couldn't think of a better way to capture events from other plugins
     #processMessage(message) {
-        try {
-            switch (message.type) {
-                case "chat_event":
-                    this.recvChat(message);
-                    break;
-            }
-        } catch (err) {
-            // whatever, don't care
+        switch (message.type) {
+            case "chat_event":
+                this.recvChat(message);
+                break;
         }
     }
 
@@ -221,14 +220,35 @@ class InstancePlugin extends libPlugin.BaseInstancePlugin {
      * Global Chat Implementation
      * ####################################################
      */
+
+    #wrapChatMessage(message) {
+        return {
+            type: "chat_event",
+            data: {
+                instance_name: this.instance.name,
+                content: message,
+            }
+        }
+    }
+
+	async onOutput(output) {
+		if (output.type === "action" && output.action === "CHAT") {
+            this.recvChat(this.#wrapChatMessage(output.message));
+		}
+	}
+
     sendChat(message) {
         if (!this.globalChat) return;
+        this.logger.info(`Sending chat msg: ${message}`);
+
         this.globalChat.sendChat(message);
+        this.globalChat.chatEventHandler(this.#wrapChatMessage(message));
     }
 
     recvChat(message) {
-        for (const interface of this.#interfaces.values()) {
-            interface.send(message);
+        this.logger.info(`Received chat msg: ${JSON.stringify(message)}`);
+        for (const conn of this.#interfaces.values()) {
+            conn.send(message);
         }
     }
 

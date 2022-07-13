@@ -7,7 +7,7 @@
   "license": "MIT",
   "repository": "Heinermann/ClusterioFileIOGameBridge",
   "scripts": {
-    "build": "webpack-cli --env production"
+    "prepare": "webpack-cli --env production"
   },
   "keywords": [
     "clusterio",
